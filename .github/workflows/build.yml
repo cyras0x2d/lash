@@ -1,15 +1,18 @@
-name: Build & Verify LASH
+name: Build & Release LASH
 
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
   build:
     name: Build LASH (C++/Qt6/LevelDB)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -18,7 +21,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev libleveldb-dev
+          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev libleveldb-dev fuse libfuse2 wget file desktop-file-utils patchelf
 
       - name: Configure CMake
         run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build
@@ -31,3 +34,45 @@ jobs:
         with:
           name: lash-binary
           path: build/lash
+
+      - name: Package AppImage
+        run: |
+          # Download linuxdeployqt continuous build
+          wget -c "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
+
+          # Setup AppDir directory hierarchy
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          cp build/lash AppDir/usr/bin/lash
+
+          # Create desktop configuration file
+          cat << 'EOF' > AppDir/usr/share/applications/lash.desktop
+          [Desktop Entry]
+          Type=Application
+          Name=LASH
+          Exec=lash
+          Icon=lash
+          Categories=Utility;
+          Terminal=false
+          EOF
+
+          # Copy application icon
+          cp icons/info.svg AppDir/usr/share/icons/hicolor/256x256/apps/lash.svg
+          cp icons/info.svg AppDir/lash.svg
+
+          # Package AppImage bundling Qt6 libraries, plugins, QML modules, and dependencies
+          ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/lash.desktop -appimage -qmldir=. -unsupported-allow-new-glibc
+
+          # Standardize output AppImage filename
+          if [ -f LASH*.AppImage ]; then
+            mv LASH*.AppImage LASH-x86_64.AppImage
+          fi
+
+      - name: Draft GitHub Release on Tag Push
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: true
+          files: |
+            LASH-x86_64.AppImage
+            build/lash
