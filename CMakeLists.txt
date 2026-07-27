@@ -26,6 +26,7 @@ qt_add_executable(lash
     HashController.h
 )
 
+set_target_properties(lash PROPERTIES QT_RESOURCE_PREFIX "/")
 qt6_add_resources(lash "app_resources"
     FILES
         qml.qrc
