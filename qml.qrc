@@ -6,7 +6,10 @@
         <file>icons/info.svg</file>
         <file>icons/clear.svg</file>
         <file>icons/keep.svg</file>
-        <file>font/cyberblast.ttf</file>
+        <file>font/Bitcoa.otf</file>
+        <file>font/Bitcoa.ttf</file>
+        <file>font/Cyber Blast.otf</file>
         <file>font/cyberblast.otf</file>
+        <file>font/cyberblast.ttf</file>
     </qresource>
 </RCC>

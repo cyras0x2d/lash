@@ -38,19 +38,10 @@ static std::string hexDigest(const EVP_MD *md, const std::string &input) {
 }
 
 HashController::HashController(QObject *parent) : QObject(parent) {
-  leveldb::Options options;
-  options.create_if_missing = true;
-
   QSettings settings("Cyras", "HashLookup");
   m_activeWordlists = settings.value("activeWordlists").toStringList();
 
-  // Opens or creates the database folder
-  leveldb::Status status = leveldb::DB::Open(options, "lash_db", &db);
-
-  if (!status.ok()) {
-    emit errorOccurred("Failed to open LevelDB: " +
-                       QString::fromStdString(status.ToString()));
-  } else {
+  if (openDatabase()) {
     std::thread([this]() {
       updateDbStatsCount();
     }).detach();
@@ -61,6 +52,176 @@ HashController::~HashController() {
   std::lock_guard<std::mutex> lock(dbMutex);
   delete db;
   db = nullptr;
+}
+
+bool HashController::openDatabase() {
+  leveldb::Options options;
+  options.create_if_missing = true;
+
+  leveldb::Status status = leveldb::DB::Open(options, "lash_db", &db);
+
+  // Corruption Recovery: If DB::Open fails due to corruption, automatically RepairDB and retry open
+  if (!status.ok() && status.IsCorruption()) {
+    std::cerr << "[LevelDB WARNING] Corruption detected in lash_db: " << status.ToString()
+              << ". Attempting automatic repair via leveldb::RepairDB..." << std::endl;
+    emit statusUpdate("[!] DB Corruption detected. Running RepairDB...");
+
+    leveldb::Status repairStatus = leveldb::RepairDB("lash_db", options);
+    if (repairStatus.ok()) {
+      std::cout << "[LevelDB INFO] RepairDB succeeded. Retrying leveldb::DB::Open..." << std::endl;
+      status = leveldb::DB::Open(options, "lash_db", &db);
+    } else {
+      std::cerr << "[LevelDB ERROR] RepairDB failed: " << repairStatus.ToString() << std::endl;
+    }
+  }
+
+  // Lock Handling & General Error reporting
+  if (!status.ok()) {
+    std::string errStr = status.ToString();
+    if (status.IsIOError() || errStr.find("lock") != std::string::npos || errStr.find("LOCK") != std::string::npos) {
+      std::cerr << "[LevelDB ERROR] Database lock error: " << errStr << std::endl;
+      emit dbLockedError("Database is locked by another process: " + QString::fromStdString(errStr));
+      emit errorOccurred("DB_LOCKED: Database lock error: " + QString::fromStdString(errStr));
+    } else {
+      std::cerr << "[LevelDB ERROR] Failed to open LevelDB: " << errStr << std::endl;
+      emit errorOccurred("Failed to open LevelDB: " + QString::fromStdString(errStr));
+    }
+    db = nullptr;
+    return false;
+  }
+
+  return true;
+}
+
+bool HashController::isDbOpen() const {
+  return db != nullptr;
+}
+
+bool HashController::lookupHashCli(const QString &hash, QString &outPlaintext) {
+  std::lock_guard<std::mutex> lock(dbMutex);
+  if (!db) return false;
+
+  std::string plaintext;
+  QString cleanHash = hash.trimmed().toLower();
+  leveldb::Status s = db->Get(leveldb::ReadOptions(), cleanHash.toStdString(), &plaintext);
+  if (s.ok()) {
+    outPlaintext = QString::fromStdString(plaintext);
+    return true;
+  }
+  return false;
+}
+
+bool HashController::addWordCli(const QString &word) {
+  std::string stdWord = word.toStdString();
+  if (stdWord.empty()) return false;
+
+  std::lock_guard<std::mutex> lock(dbMutex);
+  if (!db) return false;
+
+  QString md5Hash = computeHash(word, "MD5");
+  QString sha1Hash = computeHash(word, "SHA1");
+  QString sha256Hash = computeHash(word, "SHA256");
+
+  leveldb::WriteOptions writeOpts;
+  db->Put(writeOpts, md5Hash.toStdString(), stdWord);
+  db->Put(writeOpts, sha1Hash.toStdString(), stdWord);
+  db->Put(writeOpts, sha256Hash.toStdString(), stdWord);
+
+  updateDbStatsCount();
+  return true;
+}
+
+bool HashController::importWordlistSync(const QString &filePath, uint64_t &outWordsImported) {
+  std::string path = filePath.toStdString();
+  std::ifstream file(path);
+  if (!file.is_open()) return false;
+
+  const size_t CHUNK_SIZE = 10000;
+  std::vector<std::string> wordChunk;
+  wordChunk.reserve(CHUNK_SIZE);
+  outWordsImported = 0;
+
+  const EVP_MD *md5 = EVP_md5();
+  const EVP_MD *sha1 = EVP_sha1();
+  const EVP_MD *sha256 = EVP_sha256();
+
+  auto processChunk = [&](const std::vector<std::string> &words) {
+    if (words.empty()) return;
+
+    struct Entry {
+      std::string md5;
+      std::string sha1;
+      std::string sha256;
+      std::string word;
+    };
+
+    std::vector<Entry> entries(words.size());
+    unsigned int numThreads = std::thread::hardware_concurrency();
+    if (numThreads == 0) numThreads = 4;
+
+    size_t total = words.size();
+    size_t chunkSize = (total + numThreads - 1) / numThreads;
+
+    std::vector<std::thread> workers;
+    for (unsigned int t = 0; t < numThreads; ++t) {
+      size_t start = t * chunkSize;
+      size_t end = std::min(start + chunkSize, total);
+      if (start >= total) break;
+
+      workers.emplace_back([&, start, end]() {
+        for (size_t i = start; i < end; ++i) {
+          entries[i].md5 = hexDigest(md5, words[i]);
+          entries[i].sha1 = hexDigest(sha1, words[i]);
+          entries[i].sha256 = hexDigest(sha256, words[i]);
+          entries[i].word = words[i];
+        }
+      });
+    }
+
+    for (auto &w : workers) {
+      if (w.joinable()) w.join();
+    }
+
+    leveldb::WriteBatch batch;
+    for (const auto &entry : entries) {
+      batch.Put(entry.md5, entry.word);
+      batch.Put(entry.sha1, entry.word);
+      batch.Put(entry.sha256, entry.word);
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(dbMutex);
+      if (db) {
+        leveldb::WriteOptions writeOpts;
+        db->Write(writeOpts, &batch);
+      }
+    }
+  };
+
+  std::string line;
+  while (std::getline(file, line)) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
+      line.pop_back();
+    }
+    if (line.empty()) continue;
+
+    wordChunk.push_back(line);
+    if (wordChunk.size() >= CHUNK_SIZE) {
+      processChunk(wordChunk);
+      outWordsImported += wordChunk.size();
+      wordChunk.clear();
+    }
+  }
+
+  if (!wordChunk.empty()) {
+    processChunk(wordChunk);
+    outWordsImported += wordChunk.size();
+    wordChunk.clear();
+  }
+
+  file.close();
+  updateDbStatsCount();
+  return true;
 }
 
 QStringList HashController::activeWordlists() const {
@@ -84,12 +245,16 @@ void HashController::updateDbStatsCount() {
   emit totalHashesChanged();
 }
 
-// The OpenSSL implementation converted to handle Qt's QString
 QString HashController::computeHash(const QString &input,
-                                    const QString &algorithm) {
+                                     const QString &algorithm) {
   std::string stdInput = input.toStdString();
   std::string stdAlgo = algorithm.toStdString();
-  const EVP_MD *md = EVP_get_digestbyname(stdAlgo.c_str());
+  const EVP_MD *md = nullptr;
+  if (stdAlgo == "MD5" || stdAlgo == "md5") md = EVP_md5();
+  else if (stdAlgo == "SHA1" || stdAlgo == "sha1") md = EVP_sha1();
+  else if (stdAlgo == "SHA256" || stdAlgo == "sha256") md = EVP_sha256();
+  else md = EVP_get_digestbyname(stdAlgo.c_str());
+
   if (!md) return "";
   return QString::fromStdString(hexDigest(md, stdInput));
 }
@@ -170,109 +335,15 @@ void HashController::importWordlist(const QString &filePath) {
   emit activeWordlistsChanged();
 
   std::thread([this, filePath, fileName]() {
-    std::string path = filePath.toStdString();
-    std::ifstream file(path);
-
-    if (!file.is_open()) {
-      emit errorOccurred("Cannot open file: " + fileName);
-      return;
-    }
-
-    const size_t CHUNK_SIZE = 10000;
-    std::vector<std::string> wordChunk;
-    wordChunk.reserve(CHUNK_SIZE);
-
     uint64_t totalWords = 0;
-
-    const EVP_MD *md5 = EVP_md5();
-    const EVP_MD *sha1 = EVP_sha1();
-    const EVP_MD *sha256 = EVP_sha256();
-
-    auto processChunk = [&](const std::vector<std::string> &words) {
-      if (words.empty()) return;
-
-      struct Entry {
-        std::string md5;
-        std::string sha1;
-        std::string sha256;
-        std::string word;
-      };
-
-      std::vector<Entry> entries(words.size());
-
-      unsigned int numThreads = std::thread::hardware_concurrency();
-      if (numThreads == 0) numThreads = 4;
-
-      size_t total = words.size();
-      size_t chunkSize = (total + numThreads - 1) / numThreads;
-
-      std::vector<std::thread> workers;
-      for (unsigned int t = 0; t < numThreads; ++t) {
-        size_t start = t * chunkSize;
-        size_t end = std::min(start + chunkSize, total);
-        if (start >= total) break;
-
-        workers.emplace_back([&, start, end]() {
-          for (size_t i = start; i < end; ++i) {
-            entries[i].md5 = hexDigest(md5, words[i]);
-            entries[i].sha1 = hexDigest(sha1, words[i]);
-            entries[i].sha256 = hexDigest(sha256, words[i]);
-            entries[i].word = words[i];
-          }
-        });
-      }
-
-      for (auto &w : workers) {
-        if (w.joinable()) w.join();
-      }
-
-      leveldb::WriteBatch batch;
-      for (const auto &entry : entries) {
-        batch.Put(entry.md5, entry.word);
-        batch.Put(entry.sha1, entry.word);
-        batch.Put(entry.sha256, entry.word);
-      }
-
-      {
-        std::lock_guard<std::mutex> lock(dbMutex);
-        if (db) {
-          leveldb::WriteOptions writeOpts;
-          db->Write(writeOpts, &batch);
-        }
-      }
-    };
-
-    std::string line;
-    while (std::getline(file, line)) {
-      while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
-        line.pop_back();
-      }
-      if (line.empty()) continue;
-
-      wordChunk.push_back(line);
-
-      if (wordChunk.size() >= CHUNK_SIZE) {
-        processChunk(wordChunk);
-        totalWords += wordChunk.size();
-        wordChunk.clear();
-      }
+    if (importWordlistSync(filePath, totalWords)) {
+      QLocale locale(QLocale::English);
+      QString wordsStr = locale.toString((qlonglong)totalWords);
+      QString hashesStr = locale.toString((qlonglong)(totalWords * 3));
+      emit statusUpdate("[+] Imported " + fileName + " (" + wordsStr + " words / " + hashesStr + " hashes)");
+    } else {
+      emit errorOccurred("Cannot open file: " + fileName);
     }
-
-    if (!wordChunk.empty()) {
-      processChunk(wordChunk);
-      totalWords += wordChunk.size();
-      wordChunk.clear();
-    }
-
-    file.close();
-
-    updateDbStatsCount();
-
-    QLocale locale(QLocale::English);
-    QString wordsStr = locale.toString((qlonglong)totalWords);
-    QString hashesStr = locale.toString((qlonglong)(totalWords * 3));
-
-    emit statusUpdate("[+] Imported " + fileName + " (" + wordsStr + " words / " + hashesStr + " hashes)");
   }).detach();
 }
 
@@ -376,12 +447,7 @@ void HashController::clearDatabase() {
                          QString::fromStdString(status.ToString()));
     }
 
-    options.create_if_missing = true;
-    status = leveldb::DB::Open(options, "lash_db", &db);
-    if (!status.ok()) {
-      emit errorOccurred("Failed to re-open LevelDB after clear: " +
-                         QString::fromStdString(status.ToString()));
-    } else {
+    if (openDatabase()) {
       m_totalHashes = 0;
       m_activeWordlists.clear();
       QSettings settings("Cyras", "HashLookup");
@@ -392,5 +458,3 @@ void HashController::clearDatabase() {
     }
   }).detach();
 }
-
-

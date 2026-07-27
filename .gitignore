@@ -18,3 +18,7 @@ lash_db/
 .idea/
 .vscode/
 *.user
+
+# Local Temporary Directories
+tmp/
+tmp2/

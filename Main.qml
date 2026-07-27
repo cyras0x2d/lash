@@ -217,6 +217,9 @@ ApplicationWindow {
                 function onErrorOccurred(errorMessage) {
                     appendFormatted('<font color="#ff5555"><b>[!] ERROR: ' + errorMessage + '</b></font>')
                 }
+                function onDbLockedError(errorMessage) {
+                    appendFormatted('<font color="#ff5555"><b>[!] DB LOCKED: ' + errorMessage + '</b></font>')
+                }
             }
 
             function appendConsole(msg) {

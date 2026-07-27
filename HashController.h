@@ -19,7 +19,13 @@ public:
   QStringList activeWordlists() const;
   qint64 totalHashes() const;
 
-  // These slots can be called directly from the QML GUI
+  // LevelDB state check & CLI helpers
+  bool isDbOpen() const;
+  bool lookupHashCli(const QString &hash, QString &outPlaintext);
+  bool addWordCli(const QString &word);
+  bool importWordlistSync(const QString &filePath, uint64_t &outWordsImported);
+
+  // QML GUI Invokable slots
   Q_INVOKABLE void addWord(const QString &word);
   Q_INVOKABLE void lookupHash(const QString &hash);
   Q_INVOKABLE void importWordlist(const QString &filePath);
@@ -28,10 +34,10 @@ public:
   Q_INVOKABLE void clearDatabase();
 
 signals:
-  // These signals send data back to the QML GUI to update the screen
   void statusUpdate(const QString &message);
   void matchFound(const QString &plaintext);
   void errorOccurred(const QString &errorMessage);
+  void dbLockedError(const QString &errorMessage);
   void activeWordlistsChanged();
   void totalHashesChanged();
 
@@ -41,10 +47,9 @@ private:
   QStringList m_activeWordlists;
   qint64 m_totalHashes{0};
 
+  bool openDatabase();
   void updateDbStatsCount();
   QString computeHash(const QString &input, const QString &algorithm);
 };
 
 #endif // HASHCONTROLLER_H
-
-
