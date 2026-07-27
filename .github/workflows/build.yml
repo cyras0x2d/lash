@@ -21,7 +21,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev libleveldb-dev fuse libfuse2 wget file desktop-file-utils patchelf
+          sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-declarative-dev libleveldb-dev fuse libfuse2 wget file desktop-file-utils patchelf libgl1-mesa-dev
 
       - name: Configure CMake
         run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build
