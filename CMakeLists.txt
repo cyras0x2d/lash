@@ -28,8 +28,19 @@ qt_add_executable(lash
 
 set_target_properties(lash PROPERTIES QT_RESOURCE_PREFIX "/")
 qt6_add_resources(lash "app_resources"
+    PREFIX "/"
     FILES
-        qml.qrc
+        Main.qml
+        icons/clear.svg
+        icons/folder-open.svg
+        icons/info.svg
+        icons/keep.svg
+        icons/plus-square.svg
+        font/Bitcoa.otf
+        font/Bitcoa.ttf
+        "font/Cyber Blast.otf"
+        font/cyberblast.otf
+        font/cyberblast.ttf
 )
 
 # Apply Interprocedural Optimization (LTO) if supported by compiler/toolchain

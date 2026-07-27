@@ -1,8 +1,6 @@
 #include "HashController.h"
 #include <QCommandLineOption>
 #include <QCommandLineParser>
-#include <QDebug>
-#include <QDirIterator>
 #include <QFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -149,13 +147,6 @@ int main(int argc, char *argv[]) {
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("hashEngine", &hashController);
-
-  qDebug() << "--- DUMPING VIRTUAL RESOURCE SYSTEM ---";
-  QDirIterator it(":", QDirIterator::Subdirectories);
-  while (it.hasNext()) {
-      qDebug() << it.next();
-  }
-  qDebug() << "---------------------------------------";
 
   const QUrl url(QStringLiteral("qrc:/Main.qml"));
   engine.load(url);
