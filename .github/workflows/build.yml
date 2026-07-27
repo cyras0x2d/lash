@@ -60,6 +60,10 @@ jobs:
           cp icons/info.svg AppDir/usr/share/icons/hicolor/256x256/apps/lash.svg
           cp icons/info.svg AppDir/lash.svg
 
+          # Bypass linuxdeployqt's silent exit(1) sabotage trap
+          mkdir -p AppDir/usr/share/doc/libc6
+          touch AppDir/usr/share/doc/libc6/copyright
+
           # Export required VERSION variable and package AppImage with explicit qmake6 path
           export VERSION=1.0.0
           ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/lash.desktop -appimage -qmldir=. -qmake=$(which qmake6) -unsupported-allow-new-glibc
