@@ -1,0 +1,20 @@
+# Build & Temporary Files
+build/
+build_test/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.stash
+*.o
+*.a
+*.so
+
+# Database & Runtime Output
+lash_db/
+*.log
+
+# IDE & Tooling
+.idea/
+.vscode/
+*.user

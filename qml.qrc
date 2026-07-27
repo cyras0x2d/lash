@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Main.qml</file>
+        <file>icons/folder-open.svg</file>
+        <file>icons/plus-square.svg</file>
+        <file>icons/info.svg</file>
+        <file>icons/clear.svg</file>
+        <file>icons/keep.svg</file>
+        <file>font/cyberblast.ttf</file>
+        <file>font/cyberblast.otf</file>
+    </qresource>
+</RCC>
