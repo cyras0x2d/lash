@@ -148,8 +148,7 @@ int main(int argc, char *argv[]) {
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("hashEngine", &hashController);
 
-  using namespace Qt::StringLiterals;
-  const QUrl url(u"qrc:/Main.qml"_s);
+  const QUrl url(QStringLiteral("qrc:/Main.qml"));
   engine.load(url);
 
   if (engine.rootObjects().isEmpty()) {
