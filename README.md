@@ -11,7 +11,7 @@ LASH is a lightweight, hardware-accelerated desktop application designed for sec
 Download and launch the latest pre-compiled AppImage release directly from the terminal:
 
 ```bash
-wget https://github.com/cyras0x2d/lash.git/../releases/latest/download/LASH-x86_64.AppImage -O lash
+wget https://github.com/cyras0x2d/lash/releases/latest/download/LASH-x86_64.AppImage -O lash
 chmod +x lash
 ./lash
 ```
