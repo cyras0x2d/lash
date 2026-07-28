@@ -56,7 +56,6 @@ ApplicationWindow {
 
         Item {
             id: startScreenItem
-            anchors.fill: parent
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -179,7 +178,6 @@ ApplicationWindow {
 
         Item {
             id: dashboardItem
-            anchors.fill: parent
 
             function formatHashCount(num) {
                 if (num >= 1000000000) return (num / 1000000000).toFixed(1) + "B";
