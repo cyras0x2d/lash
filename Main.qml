@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
-import QtQuick.Templates
+
 
 ApplicationWindow {
     id: window
@@ -48,6 +48,8 @@ ApplicationWindow {
         }
     }
 
+
+
     // -------------------------------------------------------------
     // START SCREEN COMPONENT
     // -------------------------------------------------------------
@@ -56,6 +58,8 @@ ApplicationWindow {
 
         Item {
             id: startScreenItem
+            width: parent ? parent.width : 960
+            height: parent ? parent.height : 600
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -159,12 +163,21 @@ ApplicationWindow {
 
                 // Watermark
                 Text {
-                    text: "by Cyras"
-                    color: "#444444"
+                    text: "by <font color='" + (cyrasStartMouseArea.containsMouse ? "#00ff99" : "#666666") + "'>Cyras</font>"
+                    textFormat: Text.RichText
+                    color: "#666666"
                     font.pixelSize: 12
                     font.italic: true
                     font.family: sansFont
                     Layout.alignment: Qt.AlignHCenter
+
+                    MouseArea {
+                        id: cyrasStartMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Qt.openUrlExternally("https://github.com/cyras0x2d")
+                    }
                 }
             }
         }
@@ -178,6 +191,8 @@ ApplicationWindow {
 
         Item {
             id: dashboardItem
+            width: parent ? parent.width : 960
+            height: parent ? parent.height : 600
 
             function formatHashCount(num) {
                 if (num >= 1000000000) return (num / 1000000000).toFixed(1) + "B";
@@ -194,6 +209,8 @@ ApplicationWindow {
                 }
             }
 
+
+
             // Listen for signals from C++ backend
             Connections {
                 target: hashEngine
@@ -206,18 +223,46 @@ ApplicationWindow {
                         appendFormatted('<font color="#888888">' + message + '</font>')
                     } else if (message.startsWith("[+] Imported") || message.indexOf("Database cleared") !== -1) {
                         appendFormatted('<font color="#00ff99">' + message + '</font>')
+                        // Stop all divider animations when import/clear/remove completes
+                        if (typeof stopAllDividerAnims === "function") stopAllDividerAnims()
+                    } else if (message.startsWith("Removed ")) {
+                        appendFormatted('<font color="#ffaa00">' + message + '</font>')
+                        if (typeof stopAllDividerAnims === "function") stopAllDividerAnims()
                     } else {
                         appendFormatted('<font color="#888888">' + message + '</font>')
                     }
                 }
                 function onMatchFound(matchResult) {
                     appendFormatted('<font color="#00ff99"><b>[+] MATCH | ' + matchResult + '</b></font>')
+                    // Trigger the animated match toast
+                    matchToast.show(matchResult)
                 }
                 function onErrorOccurred(errorMessage) {
                     appendFormatted('<font color="#ff5555"><b>[!] ERROR: ' + errorMessage + '</b></font>')
+                    // Stop animations on error
+                    if (typeof stopAllDividerAnims === "function") stopAllDividerAnims()
                 }
                 function onDbLockedError(errorMessage) {
                     appendFormatted('<font color="#ff5555"><b>[!] DB LOCKED: ' + errorMessage + '</b></font>')
+                    if (typeof stopAllDividerAnims === "function") stopAllDividerAnims()
+                }
+            }
+
+            function stopAllDividerAnims() {
+                if (typeof importFluidAnim !== "undefined") {
+                    importFluidAnim.stop()
+                    fluidDrop.height = 0
+                    fluidSplash.width = 0
+                    fluidSplash.opacity = 0
+                }
+                if (typeof drainAnim !== "undefined") {
+                    drainAnim.stop()
+                    drainDrop.height = 0
+                    drainDrop.opacity = 1.0
+                }
+                if (typeof clearTrailAnim !== "undefined") {
+                    clearTrailAnim.stop()
+                    clearDrop.y = dividerOverlay.height
                 }
             }
 
@@ -241,7 +286,139 @@ ApplicationWindow {
                     if (path.startsWith("file://")) {
                         path = path.substring(7)
                     }
+                    // 1. Core functionality FIRST
                     hashEngine.importWordlist(path)
+                    // 2. Aesthetic animation (with safety check)
+                    if (typeof importFluidAnim !== "undefined") importFluidAnim.start()
+                }
+            }
+
+
+            // =============================================================
+            // MATCH TOAST — Animated "Hash Cracked" Notification
+            // =============================================================
+            Rectangle {
+                id: matchToast
+                width: Math.min(dashboardItem.width - 60, 520)
+                height: toastContent.implicitHeight + 28
+                x: Math.round((dashboardItem.width - width) / 2)
+                y: -height - 20  // Start off-screen
+                z: 200
+                color: "#111111"
+                radius: 8
+                border.color: "#00ff99"
+                border.width: 2
+                opacity: 0
+                visible: opacity > 0
+
+                property string matchText: ""
+
+                function show(text) {
+                    matchText = text
+                    toastEnterAnim.start()
+                }
+
+                // Glow effect behind the toast
+                layer.enabled: true
+                layer.effect: Glow {
+                    radius: 12
+                    samples: 25
+                    color: "#4000ff99"
+                    spread: 0.15
+                }
+
+                RowLayout {
+                    id: toastContent
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 12
+
+                    // Checkmark indicator
+                    Rectangle {
+                        width: 28
+                        height: 28
+                        radius: 14
+                        color: "#00ff99"
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✓"
+                            color: "#0a0a0a"
+                            font.pixelSize: 16
+                            font.bold: true
+                            font.family: sansFont
+                        }
+                    }
+
+                    // Match info
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: "HASH CRACKED"
+                            color: "#00ff99"
+                            font.pixelSize: 11
+                            font.bold: true
+                            font.letterSpacing: 1.5
+                            font.family: sansFont
+                        }
+                        Text {
+                            text: matchToast.matchText
+                            color: "#ffffff"
+                            font.pixelSize: 13
+                            font.bold: true
+                            font.family: monoFont
+                            elide: Text.ElideMiddle
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+
+                // Enter animation: spring down from top
+                SequentialAnimation {
+                    id: toastEnterAnim
+
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: matchToast
+                            property: "y"
+                            to: 20
+                            duration: 500
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.2
+                        }
+                        NumberAnimation {
+                            target: matchToast
+                            property: "opacity"
+                            to: 1.0
+                            duration: 300
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    // Hold visible for 3.5 seconds
+                    PauseAnimation { duration: 3500 }
+
+                    // Exit animation: slide back up
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: matchToast
+                            property: "y"
+                            to: -matchToast.height - 20
+                            duration: 400
+                            easing.type: Easing.InBack
+                            easing.overshoot: 1.0
+                        }
+                        NumberAnimation {
+                            target: matchToast
+                            property: "opacity"
+                            to: 0.0
+                            duration: 350
+                            easing.type: Easing.InCubic
+                        }
+                    }
                 }
             }
 
@@ -250,39 +427,47 @@ ApplicationWindow {
                 id: addWordDialog
                 title: "Add Word"
                 modal: true
-                anchors.centerIn: parent
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
                 width: 320
                 padding: 20
                 background: Rectangle {
                     color: "#181818"
                     radius: 8
                     border.color: "#333333"
+                    border.width: 1
                 }
-                header: Rectangle {
-                    color: "transparent"
-                    height: 36
+                header: null
+                contentItem: ColumnLayout {
+                    spacing: 16
+
                     Text {
                         text: "ADD WORD"
                         color: "#00ff99"
                         font.pixelSize: 12
                         font.bold: true
                         font.family: sansFont
-                        anchors.centerIn: parent
+                        Layout.alignment: Qt.AlignHCenter
                     }
-                }
-                contentItem: ColumnLayout {
-                    spacing: 15
+
                     TextField {
                         id: singleWordInput
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 32
                         placeholderText: "Word..."
+                        placeholderTextColor: "#888888"
                         color: "#ffffff"
                         font.family: monoFont
                         font.pixelSize: 13
+                        leftPadding: 12
+                        rightPadding: 12
+
                         background: Rectangle {
+                            implicitHeight: 32
                             color: "#222222"
                             radius: 4
-                            border.color: singleWordInput.activeFocus ? "#00ff99" : "#444444"
+                            border.color: singleWordInput.activeFocus ? "#00ff99" : "#333333"
+                            border.width: 1
                         }
                         onAccepted: {
                             if (singleWordInput.text.trim().length > 0) {
@@ -292,12 +477,37 @@ ApplicationWindow {
                             }
                         }
                     }
+
                     RowLayout {
                         Layout.alignment: Qt.AlignRight
                         spacing: 10
                         Button {
                             text: "Cancel"
                             onClicked: addWordDialog.close()
+                            contentItem: Text {
+                                text: parent.text
+                                color: cancelBtnArea.containsMouse ? "#ffffff" : "#aaaaaa"
+                                font.pixelSize: 12
+                                font.bold: true
+                                font.family: sansFont
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                implicitWidth: 80
+                                implicitHeight: 32
+                                color: cancelBtnArea.containsMouse ? "#2a2a2a" : "#1a1a1a"
+                                radius: 4
+                                border.color: cancelBtnArea.containsMouse ? "#666666" : "#333333"
+                                border.width: 1
+                                MouseArea {
+                                    id: cancelBtnArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: addWordDialog.close()
+                                }
+                            }
                         }
                         Button {
                             text: "Add Word"
@@ -306,6 +516,36 @@ ApplicationWindow {
                                     hashEngine.addWord(singleWordInput.text.trim())
                                     singleWordInput.text = ""
                                     addWordDialog.close()
+                                }
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: addWordBtnArea.containsMouse ? "#ffffff" : "#00ff99"
+                                font.pixelSize: 12
+                                font.bold: true
+                                font.family: sansFont
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                implicitWidth: 90
+                                implicitHeight: 32
+                                color: addWordBtnArea.containsMouse ? "#1a3a2a" : "#141414"
+                                radius: 4
+                                border.color: addWordBtnArea.containsMouse ? "#00ff99" : "#333333"
+                                border.width: 1
+                                MouseArea {
+                                    id: addWordBtnArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (singleWordInput.text.trim().length > 0) {
+                                            hashEngine.addWord(singleWordInput.text.trim())
+                                            singleWordInput.text = ""
+                                            addWordDialog.close()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -319,7 +559,8 @@ ApplicationWindow {
             Dialog {
                 id: removeWordlistDialog
                 modal: true
-                anchors.centerIn: parent
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
                 width: 320
                 padding: 20
                 background: Rectangle {
@@ -342,9 +583,10 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: "Remove wordlist. Delete generated hashes from database?"
-                        color: "#cccccc"
-                        font.pixelSize: 12
+                        text: "Purge compiled hashes from database?"
+                        color: "#888888"
+                        font.pixelSize: 11
+                        font.letterSpacing: 0.3
                         font.family: sansFont
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
@@ -406,6 +648,7 @@ ApplicationWindow {
                                 onClicked: {
                                     hashEngine.removeWordlist(targetWordlistToRemove, false)
                                     removeWordlistDialog.close()
+                                    if (typeof drainAnim !== "undefined") drainAnim.start()
                                 }
                             }
                         }
@@ -461,6 +704,7 @@ ApplicationWindow {
                                 onClicked: {
                                     hashEngine.removeWordlist(targetWordlistToRemove, true)
                                     removeWordlistDialog.close()
+                                    if (typeof drainAnim !== "undefined") drainAnim.start()
                                 }
                             }
                         }
@@ -473,7 +717,8 @@ ApplicationWindow {
                 id: aboutDialog
                 title: "About Hash Lookup"
                 modal: true
-                anchors.centerIn: parent
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
                 width: 360
                 padding: 20
                 background: Rectangle {
@@ -482,9 +727,11 @@ ApplicationWindow {
                     border.color: "#00ff99"
                     border.width: 1
                 }
-                header: Rectangle {
-                    color: "transparent"
-                    height: 36
+                header: null
+                contentItem: ColumnLayout {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 12
+
                     Text {
                         text: "ABOUT LASH"
                         color: "#00ff99"
@@ -492,12 +739,9 @@ ApplicationWindow {
                         font.pixelSize: 11
                         font.bold: true
                         font.letterSpacing: 1.2
-                        anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.alignment: Qt.AlignHCenter
                     }
-                }
-                contentItem: ColumnLayout {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 12
 
                     Text {
                         text: "LASH"
@@ -520,13 +764,22 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: "Developed by Cyras"
+                        text: "Developed by <font color='" + (cyrasAboutMouseArea.containsMouse ? "#00ff99" : "#ffffff") + "'>Cyras</font>"
+                        textFormat: Text.RichText
                         color: "#ffffff"
                         font.family: sansFont
                         font.pixelSize: 13
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         Layout.alignment: Qt.AlignHCenter
+
+                        MouseArea {
+                            id: cyrasAboutMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Qt.openUrlExternally("https://github.com/cyras0x2d")
+                        }
                     }
 
                     Rectangle {
@@ -547,10 +800,9 @@ ApplicationWindow {
                         Layout.preferredWidth: 280
                     }
 
-                    Item { implicitHeight: 4 }
-
                     Rectangle {
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 15
                         width: 100
                         height: 32
                         color: closeBtnArea.containsMouse ? "#222222" : "#141414"
@@ -576,9 +828,9 @@ ApplicationWindow {
                     }
                 }
             }
-
             // Dual Pane SplitView Layout
             SplitView {
+                id: splitViewLayout
                 anchors.fill: parent
                 anchors.margins: 15
                 orientation: Qt.Horizontal
@@ -586,6 +838,8 @@ ApplicationWindow {
                 handle: Rectangle {
                     implicitWidth: 8
                     color: "transparent"
+
+                    // Static central divider line
                     Rectangle {
                         anchors.centerIn: parent
                         width: 2
@@ -596,6 +850,7 @@ ApplicationWindow {
 
                 // LEFT PANE: Controls & State
                 Rectangle {
+                    id: leftPane
                     SplitView.preferredWidth: 350
                     SplitView.minimumWidth: 280
                     SplitView.maximumWidth: 480
@@ -622,14 +877,20 @@ ApplicationWindow {
                         TextField {
                             id: inputField
                             Layout.fillWidth: true
+                            Layout.preferredHeight: 32
                             placeholderText: "Enter Hash..."
+                            placeholderTextColor: "#888888"
                             color: "#ffffff"
                             font.family: monoFont
                             font.pixelSize: 13
+                            leftPadding: 12
+                            rightPadding: 12
                             background: Rectangle {
+                                implicitHeight: 32
                                 color: "#222222"
                                 radius: 4
                                 border.color: inputField.activeFocus ? "#00ff99" : "#333333"
+                                border.width: 1
                             }
                             
                             onAccepted: {
@@ -638,6 +899,7 @@ ApplicationWindow {
 
                                 if (text === ":clear") {
                                     hashEngine.clearDatabase()
+                                    if (typeof clearTrailAnim !== "undefined") clearTrailAnim.start()
                                 } else if (text.startsWith(":")) {
                                     appendFormatted('<font color="#ffaa00">[-] Invalid command. Use :clear to wipe database.</font>')
                                 } else {
@@ -859,6 +1121,7 @@ ApplicationWindow {
 
                 // RIGHT PANE: Console & Footer
                 Rectangle {
+                    id: rightPane
                     SplitView.fillWidth: true
                     color: "#141414"
                     radius: 8
@@ -971,6 +1234,7 @@ ApplicationWindow {
                                     onClicked: wipeAnimation.start()
                                 }
                             }
+
                         }
 
                         // Status Footer
@@ -1040,12 +1304,21 @@ ApplicationWindow {
                                         Layout.alignment: Qt.AlignRight
 
                                         Text {
-                                            text: "by Cyras"
-                                            color: "#555555"
+                                            text: "by <font color='" + (cyrasFooterMouseArea.containsMouse ? "#00ff99" : "#888888") + "'>Cyras</font>"
+                                            textFormat: Text.RichText
+                                            color: "#888888"
                                             font.pixelSize: 10
                                             font.italic: true
                                             font.family: sansFont
                                             Layout.alignment: Qt.AlignVCenter
+
+                                            MouseArea {
+                                                id: cyrasFooterMouseArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: Qt.openUrlExternally("https://github.com/cyras0x2d")
+                                            }
                                         }
 
                                         Item {
@@ -1081,6 +1354,166 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+            }
+
+            // =============================================================
+            // DIVIDER ANIMATION OVERLAY (Dynamic Lock to Splitter Handle)
+            // =============================================================
+            Item {
+                id: dividerOverlay
+                x: splitViewLayout.x + leftPane.x + leftPane.width + (rightPane.x - (leftPane.x + leftPane.width)) / 2 - 4
+                y: splitViewLayout.y
+                width: 8
+                height: splitViewLayout.height
+                z: 100
+
+                // -------------------------------------------------------------
+                // 1. FLUID IMPORT ANIMATION (Green Water Drop + Splash)
+                // -------------------------------------------------------------
+                Rectangle {
+                    id: fluidDrop
+                    width: 2
+                    height: 0
+                    color: "#00ff99"
+                    anchors.top: parent.top
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    radius: 1
+                }
+
+                Rectangle {
+                    id: fluidSplash
+                    height: 2
+                    width: 0
+                    color: "#00ff99"
+                    opacity: 0
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    radius: 1
+                }
+
+                SequentialAnimation {
+                    id: importFluidAnim
+                    loops: Animation.Infinite
+
+                    NumberAnimation {
+                        target: fluidDrop
+                        property: "height"
+                        from: 0
+                        to: dividerOverlay.height
+                        duration: 1000
+                        easing.type: Easing.InQuad
+                    }
+
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: fluidSplash
+                            property: "width"
+                            from: 2
+                            to: 120
+                            duration: 400
+                            easing.type: Easing.OutQuad
+                        }
+                        NumberAnimation {
+                            target: fluidSplash
+                            property: "opacity"
+                            from: 1.0
+                            to: 0.0
+                            duration: 400
+                            easing.type: Easing.OutQuad
+                        }
+                    }
+
+                    PropertyAction { target: fluidDrop; property: "height"; value: 0 }
+                    PropertyAction { target: fluidSplash; property: "width"; value: 0 }
+                    PropertyAction { target: fluidSplash; property: "opacity"; value: 0 }
+
+                    PauseAnimation { duration: 300 }
+                }
+
+                // -------------------------------------------------------------
+                // 2. RED REVERSE DRAIN (Wordlist Removal)
+                // -------------------------------------------------------------
+                Rectangle {
+                    id: drainDrop
+                    width: 2
+                    height: 0
+                    color: "#ff0033"
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    radius: 1
+                    z: 5
+                }
+
+                SequentialAnimation {
+                    id: drainAnim
+                    loops: Animation.Infinite
+
+                    NumberAnimation {
+                        target: drainDrop
+                        property: "height"
+                        from: 0
+                        to: dividerOverlay.height
+                        duration: 600
+                        easing.type: Easing.OutQuad
+                    }
+                    NumberAnimation {
+                        target: drainDrop
+                        property: "opacity"
+                        from: 1.0
+                        to: 0.0
+                        duration: 150
+                    }
+                    PropertyAction { target: drainDrop; property: "height"; value: 0 }
+                    PropertyAction { target: drainDrop; property: "opacity"; value: 1.0 }
+                    PauseAnimation { duration: 150 }
+                }
+
+                // -------------------------------------------------------------
+                // 3. DATABASE CLEAR WITH TRAILING PARTICLES (:clear & CLEAR wordlist)
+                // -------------------------------------------------------------
+                Rectangle {
+                    id: clearDrop
+                    width: 2
+                    height: 80
+                    color: "#ff0033"
+                    radius: 1
+                    x: Math.round((dividerOverlay.width - width) / 2)
+                    y: dividerOverlay.height
+                    visible: clearTrailAnim.running
+                    z: 5
+                }
+
+                // 5 trailing particle dots following behind clearDrop tail
+                Repeater {
+                    model: 5
+                    delegate: Rectangle {
+                        width: 4
+                        height: 4
+                        radius: 2
+                        color: "#ff0033"
+                        x: Math.round((dividerOverlay.width - width) / 2)
+                        y: clearDrop.y + clearDrop.height + 6 + (index * 16)
+                        opacity: clearTrailAnim.running ? Math.max(0.0, 1.0 - (index * 0.18)) : 0
+                        visible: clearTrailAnim.running && y < (dividerOverlay.height + 20)
+                        z: 6
+                    }
+                }
+
+                SequentialAnimation {
+                    id: clearTrailAnim
+                    loops: Animation.Infinite
+
+                    NumberAnimation {
+                        target: clearDrop
+                        property: "y"
+                        from: dividerOverlay.height
+                        to: -160
+                        duration: 850
+                        easing.type: Easing.InCubic
+                    }
+                    PropertyAction { target: clearDrop; property: "y"; value: dividerOverlay.height }
+                    PauseAnimation { duration: 150 }
                 }
             }
         }

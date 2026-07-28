@@ -14,7 +14,7 @@ include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
 
 # Find necessary libraries
-find_package(Qt6 COMPONENTS Core Gui Qml Quick REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Qml Quick QuickControls2 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_library(LEVELDB_LIB leveldb REQUIRED)
 find_package(Threads REQUIRED)
@@ -31,6 +31,7 @@ set_target_properties(lash PROPERTIES QT_RESOURCE_PREFIX "/")
 qt6_add_resources(lash "app_resources"
     PREFIX "/"
     FILES
+        qtquickcontrols2.conf
         Main.qml
         icons/clear.svg
         icons/folder-open.svg
@@ -73,6 +74,7 @@ target_link_libraries(lash PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    Qt6::QuickControls2
     OpenSSL::Crypto
     ${LEVELDB_LIB}
     Threads::Threads
