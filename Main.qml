@@ -322,7 +322,6 @@ ApplicationWindow {
                 layer.enabled: true
                 layer.effect: Glow {
                     radius: 12
-                    samples: 25
                     color: "#4000ff99"
                     spread: 0.15
                 }
