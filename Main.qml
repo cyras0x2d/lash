@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
+import QtQuick.Templates
 
 ApplicationWindow {
     id: window
