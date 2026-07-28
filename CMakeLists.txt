@@ -26,6 +26,7 @@ qt_add_executable(lash
     HashController.h
 )
 
+# Bundle QML UI components, icons, and fonts into Qt resources
 set_target_properties(lash PROPERTIES QT_RESOURCE_PREFIX "/")
 qt6_add_resources(lash "app_resources"
     PREFIX "/"
