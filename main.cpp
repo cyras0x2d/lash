@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
   app.setApplicationVersion("1.0");
 
   QCommandLineParser parser;
-  parser.setApplicationDescription("LASH - High-Performance Terminal-Styled Hash Lookup Utility");
+  parser.setApplicationDescription("LASH - Modern High-Performance Hash Lookup");
   parser.addHelpOption();
   parser.addVersionOption();
 

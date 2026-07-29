@@ -1,6 +1,6 @@
 # LASH
 
-High-performance, terminal-inspired hash lookup and wordlist database manager.
+Modern High-Performance Hash Lookup.
 
 LASH is a lightweight, hardware-accelerated desktop application designed for security researchers and developers. Powered by an embedded LevelDB key-value engine and a Qt6/QML frontend, it delivers sub-millisecond hash cracking and lookup operations across millions of records.
 

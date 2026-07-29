@@ -6,13 +6,21 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <openssl/evp.h>
+#include <QDir>
 #include <QFileInfo>
 #include <QLocale>
 #include <QSettings>
+#include <QStandardPaths>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
+
+static std::string getDbPathStd() {
+  QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir().mkpath(appData);
+  return (appData + "/lash_db").toStdString();
+}
 
 static std::string hexDigest(const EVP_MD *md, const std::string &input) {
   if (!md) return "";
@@ -58,18 +66,19 @@ bool HashController::openDatabase() {
   leveldb::Options options;
   options.create_if_missing = true;
 
-  leveldb::Status status = leveldb::DB::Open(options, "lash_db", &db);
+  std::string dbPath = getDbPathStd();
+  leveldb::Status status = leveldb::DB::Open(options, dbPath, &db);
 
   // Corruption Recovery: If DB::Open fails due to corruption, automatically RepairDB and retry open
   if (!status.ok() && status.IsCorruption()) {
-    std::cerr << "[LevelDB WARNING] Corruption detected in lash_db: " << status.ToString()
+    std::cerr << "[LevelDB WARNING] Corruption detected in " << dbPath << ": " << status.ToString()
               << ". Attempting automatic repair via leveldb::RepairDB..." << std::endl;
     emit statusUpdate("[!] DB Corruption detected. Running RepairDB...");
 
-    leveldb::Status repairStatus = leveldb::RepairDB("lash_db", options);
+    leveldb::Status repairStatus = leveldb::RepairDB(dbPath, options);
     if (repairStatus.ok()) {
       std::cout << "[LevelDB INFO] RepairDB succeeded. Retrying leveldb::DB::Open..." << std::endl;
-      status = leveldb::DB::Open(options, "lash_db", &db);
+      status = leveldb::DB::Open(options, dbPath, &db);
     } else {
       std::cerr << "[LevelDB ERROR] RepairDB failed: " << repairStatus.ToString() << std::endl;
     }
@@ -242,6 +251,12 @@ void HashController::updateDbStatsCount() {
     delete it;
   }
   m_totalHashes = static_cast<qint64>(keyCount);
+  if (m_totalHashes == 0 && !m_activeWordlists.isEmpty()) {
+    m_activeWordlists.clear();
+    QSettings settings("Cyras", "HashLookup");
+    settings.remove("activeWordlists");
+    emit activeWordlistsChanged();
+  }
   emit totalHashesChanged();
 }
 
@@ -441,7 +456,8 @@ void HashController::clearDatabase() {
     }
 
     leveldb::Options options;
-    leveldb::Status status = leveldb::DestroyDB("lash_db", options);
+    std::string dbPath = getDbPathStd();
+    leveldb::Status status = leveldb::DestroyDB(dbPath, options);
     if (!status.ok()) {
       emit errorOccurred("Failed to destroy LevelDB: " +
                          QString::fromStdString(status.ToString()));

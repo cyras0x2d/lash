@@ -3,6 +3,6 @@ Type=Application
 Name=LASH
 Exec=lash
 Icon=lash
-Comment=High-Performance Terminal-Inspired Hash Lookup Utility
+Comment=Modern High-Performance Hash Lookup
 Categories=Utility;Security;
 Terminal=false
