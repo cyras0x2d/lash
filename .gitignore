@@ -1,6 +1,9 @@
 # Build & Temporary Files
 build/
 build_test/
+build_tools/
+AppDir/
+*.AppImage
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

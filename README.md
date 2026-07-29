@@ -1,6 +1,6 @@
 # LASH
 
-High-performance, Modern Hash Lookup.
+High-performance, terminal-inspired hash lookup and wordlist database manager.
 
 LASH is a lightweight, hardware-accelerated desktop application designed for security researchers and developers. Powered by an embedded LevelDB key-value engine and a Qt6/QML frontend, it delivers sub-millisecond hash cracking and lookup operations across millions of records.
 
@@ -10,10 +10,10 @@ LASH is a lightweight, hardware-accelerated desktop application designed for sec
 
 ### Quick Install (Latest Release)
 
-Download and launch the latest pre-compiled AppImage release directly from the terminal:
+Download and launch the pre-compiled Linux binary directly from the terminal:
 
 ```bash
-wget https://github.com/cyras0x2d/lash/releases/latest/download/LASH-x86_64.AppImage -O lash
+wget https://github.com/cyras0x2d/lash/releases/latest/download/lash
 chmod +x lash
 ./lash
 ```
@@ -21,7 +21,7 @@ chmod +x lash
 Or using `curl`:
 
 ```bash
-curl -sSL https://github.com/cyras0x2d/lash/releases/latest/download/LASH-x86_64.AppImage -o lash
+curl -sSL https://github.com/cyras0x2d/lash/releases/latest/download/lash -o lash
 chmod +x lash
 ./lash
 ```

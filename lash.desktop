@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=LASH
+Exec=lash
+Icon=lash
+Comment=High-Performance Terminal-Inspired Hash Lookup Utility
+Categories=Utility;Security;
+Terminal=false
