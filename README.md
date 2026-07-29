@@ -8,12 +8,12 @@ LASH is a lightweight, hardware-accelerated desktop application designed for sec
 
 ## Installation
 
-### Quick Install (Latest Release)
+### Quick Install (Latest AppImage Release)
 
-Download and launch the pre-compiled Linux binary directly from the terminal:
+Download and launch the self-contained Linux AppImage directly from the terminal (no dependencies required):
 
 ```bash
-wget https://github.com/cyras0x2d/lash/releases/latest/download/lash
+wget https://github.com/cyras0x2d/lash/releases/latest/download/LASH-x86_64.AppImage -O lash
 chmod +x lash
 ./lash
 ```
@@ -21,7 +21,7 @@ chmod +x lash
 Or using `curl`:
 
 ```bash
-curl -sSL https://github.com/cyras0x2d/lash/releases/latest/download/lash -o lash
+curl -sSL https://github.com/cyras0x2d/lash/releases/latest/download/LASH-x86_64.AppImage -o lash
 chmod +x lash
 ./lash
 ```
